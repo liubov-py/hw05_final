@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load thumbnail %}
+{% block title %}
+  {{ group.title }}
+{% endblock %}
+{% block main %}
+  <!-- класс py-5 создает отступы сверху и снизу блока -->
+  <div class="container py-5">
+    <h1>{{ group.title }}</h1>
+    <p>
+      {{ group.description }}
+    </p>
+    <article>
+      {% for post in page_obj %}
+        {% include 'includes/post_list.html' %}
+      {% endfor %}       
+    </article>
+    {% include 'includes/paginator.html' %}
+    <!-- под последним постом нет линии -->
+  </div>  
+{% endblock %} 
