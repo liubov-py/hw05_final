@@ -8,6 +8,7 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+
 from posts.models import Comment, Follow, Group, Post
 
 User = get_user_model()
@@ -66,6 +67,13 @@ class URLTests(TestCase):
         cls.NAME_CREATE = reverse('posts:post_create')
         cls.NAME_POST_EDIT = reverse('posts:post_edit',
                                      kwargs={'post_id': cls.post.id})
+        cls.NAME_FOLLOW = reverse('posts:follow_index')
+        cls.NAME_PROFILE_FOLLOW = reverse(
+            'posts:profile_follow',
+            kwargs={'username': cls.user.username})
+        cls.NAME_PROFILE_UNFOLLOW = reverse(
+            'posts:profile_unfollow',
+            kwargs={'username': cls.user.username})
 
     @classmethod
     def tearDownClass(cls):
@@ -213,33 +221,66 @@ class URLTests(TestCase):
         response_index_2 = self.authorized_client.get(self.NAME_INDEX)
         self.assertNotEqual(response_index_0.content, response_index_2.content)
 
-    def test_follow(self):
-        author = User.objects.create_user(username='TestUserFollow')
-        self.authorized_client.get(
-            reverse('posts:profile_follow',
-                    kwargs={'username': author.username})
-        )
-        follow = Follow.objects.filter(
-            author=author,
-            user=self.user
-        ).exists()
-        self.assertTrue(follow)
-
-    def test_unfollow(self):
+    def test_profile_follow(self):
+        follow_count = Follow.objects.count()
         author = User.objects.create_user(username='TestUserFollow')
         Follow.objects.create(
             user=self.user,
             author=author
         )
         self.authorized_client.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': author.username})
+        )
+        obj = Follow.objects.first()
+        self.assertEqual(Follow.objects.count(), follow_count + 1)
+        self.assertEqual(obj.user, self.user)
+        self.assertEqual(obj.author, author)
+
+    def test_unfollow(self):
+        author = User.objects.create_user(username='TestUserFollow')
+        follow = Follow.objects.create(
+            user=self.user,
+            author=author
+        )
+        follow_count = Follow.objects.count()
+        self.authorized_client.get(
             reverse('posts:profile_unfollow',
                     kwargs={'username': author.username})
         )
-        unfollow = Follow.objects.filter(
+        follow.delete()
+        self.assertEqual(Follow.objects.count(), follow_count - 1)
+
+    def test_follow_list(self):
+        author = User.objects.create_user(username='TestUserFollow')
+        Follow.objects.create(
+            user=self.user,
+            author=author
+        )
+        post1 = Post.objects.create(
+            text='Тестовый текст для проверки подписки',
             author=author,
-            user=self.user
-        ).exists()
-        self.assertFalse(unfollow)
+            group=self.group)
+        response = self.authorized_client.get(reverse('posts:follow_index'))
+        Post.objects.first()
+        context = response.context['page_obj'][0]
+        self.assertEqual(post1.text, context.text)
+        self.assertEqual(post1.author, context.author)
+        self.assertEqual(post1.group, context.group)
+
+    def test_follow_list_another_user(self):
+        author = User.objects.create_user(username='TestUserFollow')
+        another_client = User.objects.create_user(username='TestUserFollow2')
+        another_client = Client()
+        another_client.force_login(self.user)
+        post1 = Post.objects.create(
+            text='Проверка подписки',
+            author=author,
+            group=self.group)
+        response = another_client.get(reverse('posts:follow_index'))
+        Post.objects.first()
+        context = response.context['page_obj']
+        self.assertNotIn(post1, context)
 
     def test_404_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""

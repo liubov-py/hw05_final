@@ -2,6 +2,7 @@ from http import HTTPStatus
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
+
 from posts.models import Group, Post
 
 User = get_user_model()
@@ -30,6 +31,11 @@ class URLTests(TestCase):
         cls.URL_POST_EDIT = f'/posts/{cls.post.id}/edit/'
         cls.URL_404 = '/core/404.html'
         cls.URL_403csrf = '/core/403csrf.html'
+        cls.URL_COMMENT = f'/posts/{cls.post.id}/comment/'
+        cls.URL_FOLLOW = '/follow/'
+        cls.URL_PROFILE_FOLLOW = f'/profile/{cls.user2.username}/follow/'
+        cls.URL_PROFILE_UNFOLLOW = f'/profile/{cls.user2.username}/unfollow/'
+        cls.URL_LOGIN = '/auth/login/'
 
     def setUp(self):
         # Создаем неавторизованный клиент
@@ -67,27 +73,39 @@ class URLTests(TestCase):
     def test_url_response_author(self):
         # Проверяем доступность страниц для автора поста
         pages = (self.URL_CREATE,
-                 self.URL_POST_EDIT)
+                 self.URL_POST_EDIT
+                 )
         for page in pages:
             response = self.author_client.get(page)
             self.assertEqual(response.status_code, HTTPStatus.OK)
 
-    def test_url_redirect_anonymous_on_admin_login(self):
+    def test_redirect_from_post_edit_anonymous_on_admin_login(self):
         # Проверяем доступность страниц для автора поста
         response1 = self.guest_client.get(self.URL_POST_EDIT)
         response2 = self.authorized_client.get(self.URL_POST_EDIT)
         self.assertRedirects(
-            response1, f'/auth/login/?next=/posts/{self.post.id}/edit/')
+            response1, self.URL_LOGIN + '?next=' + self.URL_POST_EDIT)
         self.assertRedirects(
-            response2, f'/auth/login/?next=/posts/{self.post.id}/edit/')
+            response2, self.URL_POST_DETAIL)
 
-    def test_url_redirect_anonymous_on_admin_login(self):
+    def test_redirect_anonymous_on_admin_login(self):
         """Страница создания поста перенаправит анонимного пользователя
         на страницу логина.
         """
-        response = self.guest_client.get(self.URL_CREATE, follow=True)
-        self.assertRedirects(
-            response, '/auth/login/?next=/create/')
+        url_names = {
+            self.URL_CREATE: self.URL_LOGIN + '?next=' + self.URL_CREATE,
+            self.URL_COMMENT:
+            self.URL_LOGIN + '?next=' + self.URL_COMMENT,
+            self.URL_FOLLOW: self.URL_LOGIN + '?next=' + self.URL_FOLLOW,
+            self.URL_PROFILE_FOLLOW:
+            self.URL_LOGIN + '?next=' + self.URL_PROFILE_FOLLOW,
+            self.URL_PROFILE_UNFOLLOW:
+            self.URL_LOGIN + '?next=' + self.URL_PROFILE_UNFOLLOW
+        }
+        for address, redirect in url_names.items():
+            with self.subTest(address=address):
+                response = self.guest_client.get(address)
+                self.assertRedirects(response, redirect)
 
     # Проверка вызываемых шаблонов для каждого адреса
     def test_urls_uses_correct_template(self):
