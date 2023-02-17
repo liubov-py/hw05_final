@@ -224,10 +224,6 @@ class URLTests(TestCase):
     def test_profile_follow(self):
         follow_count = Follow.objects.count()
         author = User.objects.create_user(username='TestUserFollow')
-        Follow.objects.create(
-            user=self.user,
-            author=author
-        )
         self.authorized_client.get(
             reverse('posts:profile_follow',
                     kwargs={'username': author.username})
@@ -239,17 +235,18 @@ class URLTests(TestCase):
 
     def test_unfollow(self):
         author = User.objects.create_user(username='TestUserFollow')
-        follow = Follow.objects.create(
-            user=self.user,
-            author=author
-        )
         follow_count = Follow.objects.count()
+        self.authorized_client.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': author.username})
+        )
+        follow_count_0 = Follow.objects.count()
         self.authorized_client.get(
             reverse('posts:profile_unfollow',
                     kwargs={'username': author.username})
         )
-        follow.delete()
-        self.assertEqual(Follow.objects.count(), follow_count - 1)
+        self.assertEqual(follow_count, follow_count_0 - 1)
+        self.assertEqual(Follow.objects.count(), follow_count)
 
     def test_follow_list(self):
         author = User.objects.create_user(username='TestUserFollow')
